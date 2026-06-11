@@ -7,25 +7,25 @@ class Homestay {
   final String imageUrl;
   final double? price;
 
-  HomeStay({
+  Homestay({
     required this.id,
     required this.name,
     required this.state,
     required this.district,
     required this.description,
     required this.imageUrl,
-    required this.price,
+    this.price,
   });
-}
 
-factory HomeStay.fromJson(Map<String, dynamic> json) {
-  return HomeStay(
-    id: json['id'] ?? 0,
-    name: json['name']?? '',
-    state: json['state']?? '',
-    district: json['district'] ?? '',
-    description: json['description'] ?? '',
-    imageUrl: json['image'] ?? json['image_url'] ,
-    price: json['price'] != null ? (json['price'] as num).toDouble() : null,
-  );
+  factory Homestay.fromJson(Map<String, dynamic> json) {
+    return Homestay(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? 'Unknown',
+      state: json['state'] ?? '',
+      district: json['district'] ?? '',
+      description: json['description'] ?? '',
+      imageUrl: json['image'] ?? json['image_url'] ?? '',
+      price: json['price'] != null ? (json['price'] as num).toDouble() : null,
+    );
+  }
 }

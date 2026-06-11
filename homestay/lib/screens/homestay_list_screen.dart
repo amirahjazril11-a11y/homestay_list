@@ -38,7 +38,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
         final data = json.decode(response.body);
         final List items = data['states'] ?? data['data'] ?? [];
         setState(() {
-          _states = items.map<String>((json) => json['name'] as String).toList();
+          _states = items.map<String>((e) => e['name'] as String).toList();
         });
       }
     } catch (e) {
@@ -75,7 +75,18 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
         final data = json.decode(response.body);
         final List items = data['homestays'] ?? data['data'] ?? [];
         setState(() {
-          _homestays = items.map((e) => Homestay.fromJson(e)).toList();
+          _homestays = items.map((e) {
+            final jsonItem = Map<String, dynamic>.from(e as Map);
+            return Homestay(
+              id: jsonItem['id'] ?? 0,
+              name: jsonItem['name'] ?? '',
+              state: jsonItem['state'] ?? '',
+              district: jsonItem['district'] ?? '',
+              description: jsonItem['description'] ?? '',
+              imageUrl: jsonItem['image'] ?? jsonItem['image_url'] ?? '',
+              price: jsonItem['price'] != null ? (jsonItem['price'] as num).toDouble() : null,
+            );
+          }).toList();
           if (_homestays.isEmpty) {
             _errorMessage = 'No homestays found for the search query.';
           }
@@ -121,7 +132,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
-          _buildFilters(),
+          _buildFilter(),
           Expanded(
             child: _buildBody(),
           ),
@@ -164,17 +175,17 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
 
   Widget _buildFilter(){
     return Padding(
-    padding: EdgeInsetsGeometry.all(12),
+    padding: const EdgeInsetsGeometry.all(12),
     child: Row(
       children: [
         Expanded(
-          child: DropdownButtonFormField<String>(
+          child: DropdownButtonFormField<String?>(
             value: _selectedState,
             items: [
               const DropdownMenuItem(value: null, child: Text('All States')),
               ..._states.map((state) => DropdownMenuItem(value: state, child: Text(state))),
             ],
-            onChanged: (value) {
+            onChanged: (String? value) {
               setState(() {
                 _selectedState = value;
                 _fetchHomestays(state: value, district: _districtController.text.trim(), query: _searchController.text.trim());
@@ -213,7 +224,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     }
     return RefreshIndicator(onRefresh: () => _fetchHomestays(query: _searchController.text.trim(), state: _selectedState, district: _districtController.text.trim()), child: ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: homestays.length,
+      itemCount: _homestays.length,
       itemBuilder: (context, index) => _buildCard(_homestays[index]),
     ),
     );
@@ -235,6 +246,16 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (homestay.imageUrl != null && homestay.imageUrl.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  homestay.imageUrl,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(),
+                ),
+              ),
               const SizedBox(height: 10),
             ],
             Text(homestay.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -256,7 +277,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
             ],
             const SizedBox(height: 6),
             const Align(
-              alignment: AlignmentGeometry.centerRight,
+              alignment: Alignment.centerRight,
               child: Text('View Details', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
             )
           ],
