@@ -31,15 +31,19 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     });
 
     try {
-      final url = query.isNotEmpty 
-          ? '$_baseUrl/homestays?search=$query' 
+      final url = query != null && query.isNotEmpty 
+          ? '$_baseUrl/homestays?search=$query&limit=20' 
           : '$_baseUrl/homestays';
       final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final data = json.decode(response.body);
+        final List items = data['homestays'] ?? data['data'] ?? [];
         setState(() {
-          homestays = data.map((json) => HomeStay.fromJson(json)).toList();
+          homestays = items.map((json) => Homestay.fromJson(json)).toList();
+          if (_homestays.isEmpty) {
+            _errorMessage = 'No homestays found for the search query.';
+          }
         });
       } else {
         setState(() {
