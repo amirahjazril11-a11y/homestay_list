@@ -180,7 +180,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       children: [
         Expanded(
           child: DropdownButtonFormField<String?>(
-            value: _selectedState,
+            initialValue: _selectedState,
             items: [
               const DropdownMenuItem(value: null, child: Text('All States')),
               ..._states.map((state) => DropdownMenuItem(value: state, child: Text(state))),
@@ -245,7 +245,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (homestay.imageUrl != null && homestay.imageUrl.isNotEmpty) ...[
+            if (homestay.imageUrl.isNotEmpty) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
@@ -253,7 +253,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox(),
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(),
                 ),
               ),
               const SizedBox(height: 10),
