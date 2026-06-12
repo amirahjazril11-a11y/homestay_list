@@ -175,42 +175,53 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
 
   Widget _buildFilter(){
     return Padding(
-    padding: const EdgeInsetsGeometry.all(12),
-    child: Row(
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<String?>(
-            initialValue: _selectedState,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All States')),
-              ..._states.map((state) => DropdownMenuItem(value: state, child: Text(state))),
-            ],
-            onChanged: (String? value) {
-              setState(() {
-                _selectedState = value;
-                _fetchHomestays(state: value, district: _districtController.text.trim(), query: _searchController.text.trim());
-              });
-            },
-            decoration: const InputDecoration(
-              labelText: 'Filter by State',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String?>(
+              initialValue: _selectedState,
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All States')),
+                ..._states.map(
+                  (state) => DropdownMenuItem(value: state, child: Text(state)),
+                ),
+              ],
+              onChanged: (String? value) {
+                setState(() {
+                  _selectedState = value;
+                  _fetchHomestays(
+                    state: value,
+                    district: _districtController.text.trim(),
+                    query: _searchController.text.trim(),
+                  );
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Filter by State',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: _districtController,
-            decoration: const InputDecoration(
-              labelText: 'Filter by District',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _districtController,
+              decoration: const InputDecoration(
+                labelText: 'Filter by District',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              onSubmitted: (_) => _onSearch(),
             ),
-            onSubmitted: (_) => _onSearch(),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }

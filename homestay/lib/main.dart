@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/homestay_list_screen.dart' as screens;
 
 void main() {
   runApp(const MainApp());
@@ -36,7 +37,9 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomestayListScreen()),
+                    MaterialPageRoute(
+            builder: (context) => const screens.HomestayListScreen(),
+          ),
         );
       }
     });
