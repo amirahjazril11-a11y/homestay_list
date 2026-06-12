@@ -27,7 +27,7 @@ class HomestayDetailScreen extends StatelessWidget {
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox(),
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(),
                 ),
               ),
             const SizedBox(height: 16),
