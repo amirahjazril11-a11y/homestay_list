@@ -22,6 +22,16 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
   String? _selectedState;
 
   static const String _baseUrl = 'http://slum78.myddns.me/homestay2u/api';
+    static const List<String> _homestayEndpoints = [
+    'homestays',
+    'homestay',
+    'homestays.php',
+    'get_homestays.php',
+  ];
+  static const List<String> _stateEndpoints = [
+    'states',
+    'states.php',
+  ];
 
   @override
   void initState() {
@@ -30,75 +40,108 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     _fetchHomestays();
   }
   
+    Uri _apiUri(String endpoint, {Map<String, String>? queryParameters}) {
+    return Uri.parse('$_baseUrl/$endpoint').replace(
+      queryParameters: queryParameters?.isEmpty == true ? null : queryParameters,
+    );
+  }
+
+  List _readItems(dynamic data, String key) {
+    if (data is List) {
+      return data;
+    }
+    if (data is Map<String, dynamic>) {
+      return data[key] ?? data['data'] ?? [];
+    }
+    return [];
+  }
+
   // Fetch list of states for dropdown filter
   Future<void> _fetchStates() async {
-    try {
-      final response = await http.get(Uri.parse('$_baseUrl/states')).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
+     for (final endpoint in _stateEndpoints) {
+      try {
+        final response = await http
+            .get(_apiUri(endpoint))
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode != 200) {
+          continue;
+        }
         final data = json.decode(response.body);
-        final List items = data['states'] ?? data['data'] ?? [];
+        final items = _readItems(data, 'states');
         setState(() {
-          _states = items.map<String>((e) => e['name'] as String).toList();
+                  _states = items
+              .map<String>((e) => (e as Map)['name']?.toString() ?? '')
+              .where((state) => state.isNotEmpty)
+              .toList();
         });
+        return;
+      } catch (e) {
+        // Handle error silently, states filter will just be unavailable.
       }
-    } catch (e) {
-      // Handle error silently, states filter will just be unavailable
     }
   }
 
 
-  Future<void> _fetchHomestays({String? query, String? state, String? district}) async {
+    Future<void> _fetchHomestays({
+    String? query,
+    String? state,
+    String? district,
+  }) async {
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
 
+    final queryParameters = <String, String>{};
+    if (query != null && query.isNotEmpty) {
+      queryParameters['search'] = query;
+      queryParameters['limit'] = '20';
+    }
+    if (state != null && state.isNotEmpty) {
+      queryParameters['state'] = state;
+    }
+    if (district != null && district.isNotEmpty) {
+      queryParameters['district'] = district;
+    }
+
+    Object? lastError;
+    int? lastStatusCode;
+
+
     try {
-      String url = '$_baseUrl/homestays';
-      final params = <String>[];
+      for (final endpoint in _homestayEndpoints) {
+        final response = await http
+            .get(_apiUri(endpoint, queryParameters: queryParameters))
+            .timeout(const Duration(seconds: 10));
 
-      if (query != null && query.isNotEmpty) {
-        params.add('search=$query&limit=20');
-      }
-      if (state != null && state.isNotEmpty){
-        params.add('state=$state');
-      }
-      if (district != null && district.isNotEmpty){
-        params.add('district=$district');
-      }
-      if (params.isNotEmpty) {
-        url += '?${params.join('&')}';
-      }
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+          lastStatusCode = response.statusCode;
+          continue;
+        }
 
-      if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final List items = data['homestays'] ?? data['data'] ?? [];
+        final items = _readItems(data, 'homestays');
         setState(() {
           _homestays = items.map((e) {
             final jsonItem = Map<String, dynamic>.from(e as Map);
-            return Homestay(
-              id: jsonItem['id'] ?? 0,
-              name: jsonItem['name'] ?? '',
-              state: jsonItem['state'] ?? '',
-              district: jsonItem['district'] ?? '',
-              description: jsonItem['description'] ?? '',
-              imageUrl: jsonItem['image'] ?? jsonItem['image_url'] ?? '',
-              price: jsonItem['price'] != null ? (jsonItem['price'] as num).toDouble() : null,
-            );
+             return Homestay.fromJson(jsonItem);
           }).toList();
           if (_homestays.isEmpty) {
             _errorMessage = 'No homestays found for the search query.';
           }
         });
-      } else {
-        setState(() {
-          _errorMessage = 'Failed to load homestays. Status code: ${response.statusCode}';
-        });
+        return;
       }
+       setState(() {
+        _errorMessage = lastStatusCode == null
+            ? 'Failed to load homestays.'
+            : 'Failed to load homestays. Status code: $lastStatusCode';
+      });     
     } catch (e) {
+       lastError = e;
       setState(() {
-        _errorMessage = 'Please check your internet connection: $e';
+        _errorMessage = 'Please check your internet connection: $lastError';
       });
     } finally {
       setState(() {
@@ -215,8 +258,13 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
               controller: _districtController,
               decoration: const InputDecoration(
                 labelText: 'Filter by District',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
               ),
               onSubmitted: (_) => _onSearch(),
             ),
