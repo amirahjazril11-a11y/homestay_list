@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/homestay_list_screen.dart' as screens;
+import 'screens/homestay_list_screen.dart';
 
 void main() {
   runApp(const MainApp());
@@ -11,34 +11,34 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: const HomestayListScreen(),
+      home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
       title: 'Homestay List in Malaysia',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
     );
   }
 }
 
-class HomestayListScreen extends StatefulWidget {
-  const HomestayListScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<HomestayListScreen> createState() => _HomestayListScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _HomestayListScreenState extends State<HomestayListScreen> {
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-                    MaterialPageRoute(
-            builder: (context) => const screens.HomestayListScreen(),
+          MaterialPageRoute(
+            builder: (context) => const HomestayListScreen(),
           ),
         );
       }
@@ -56,7 +56,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
             Icon(Icons.home, size: 100, color: Colors.teal),
             SizedBox(height: 20),
             Text(
-              'Homestay List in Malaysia.',
+              'Homestay List in Malaysia',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,

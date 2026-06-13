@@ -16,22 +16,21 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
   List<String> _states = [];
   bool _isLoading = false;
   String _errorMessage = '';
-  
+
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _districtController = TextEditingController();
   String? _selectedState;
 
+  // Search history
+  final List<String> _searchHistory = [];
+
+  // Pagination
+  int _currentLimit = 20;
+  final List<int> _limitOptions = [10, 20, 50, 100];
+
   static const String _baseUrl = 'http://slum78.myddns.me/homestay2u/api';
-    static const List<String> _homestayEndpoints = [
-    'homestays',
-    'homestay',
-    'homestays.php',
-    'get_homestays.php',
-  ];
-  static const List<String> _stateEndpoints = [
-    'states',
-    'states.php',
-  ];
+  static const String _homestaysEndpoint = 'homestays';
+  static const String _statesEndpoint = 'states';
 
   @override
   void initState() {
@@ -39,54 +38,47 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     _fetchStates();
     _fetchHomestays();
   }
-  
-    Uri _apiUri(String endpoint, {Map<String, String>? queryParameters}) {
+
+  Uri _apiUri(String endpoint, {Map<String, String>? queryParameters}) {
     return Uri.parse('$_baseUrl/$endpoint').replace(
       queryParameters: queryParameters?.isEmpty == true ? null : queryParameters,
     );
   }
 
   List _readItems(dynamic data, String key) {
-    if (data is List) {
-      return data;
-    }
+    if (data is List) return data;
     if (data is Map<String, dynamic>) {
       return data[key] ?? data['data'] ?? [];
     }
     return [];
   }
 
-  // Fetch list of states for dropdown filter
   Future<void> _fetchStates() async {
-     for (final endpoint in _stateEndpoints) {
-      try {
-        final response = await http
-            .get(_apiUri(endpoint))
-            .timeout(const Duration(seconds: 10));
+    try {
+      final response = await http
+          .get(_apiUri(_statesEndpoint))
+          .timeout(const Duration(seconds: 10));
 
-        if (response.statusCode != 200) {
-          continue;
-        }
-        final data = json.decode(response.body);
-        final items = _readItems(data, 'states');
-        setState(() {
-                  _states = items
-              .map<String>((e) => (e as Map)['name']?.toString() ?? '')
-              .where((state) => state.isNotEmpty)
-              .toList();
-        });
-        return;
-      } catch (e) {
-        // Handle error silently, states filter will just be unavailable.
-      }
+      if (response.statusCode != 200) return;
+
+      final data = json.decode(response.body);
+      final items = _readItems(data, 'states');
+      setState(() {
+        _states = items
+            .map<String>((e) => (e as Map)['state']?.toString() ?? '')
+            .where((state) => state.isNotEmpty)
+            .toList();
+      });
+    } catch (e) {
+      // Handle error silently, states filter will just be unavailable.
     }
   }
 
-
-    Future<void> _fetchHomestays({
+  Future<void> _fetchHomestays({
     String? query,
     String? state,
     String? district,
+    int? limit,
   }) async {
     setState(() {
       _isLoading = true;
@@ -96,7 +88,7 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     final queryParameters = <String, String>{};
     if (query != null && query.isNotEmpty) {
       queryParameters['search'] = query;
-      queryParameters['limit'] = '20';
+      queryParameters['limit'] = (limit ?? _currentLimit).toString();
     }
     if (state != null && state.isNotEmpty) {
       queryParameters['state'] = state;
@@ -105,43 +97,34 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       queryParameters['district'] = district;
     }
 
-    Object? lastError;
     int? lastStatusCode;
 
-
     try {
-      for (final endpoint in _homestayEndpoints) {
-        final response = await http
-            .get(_apiUri(endpoint, queryParameters: queryParameters))
-            .timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(_apiUri(_homestaysEndpoint, queryParameters: queryParameters))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-          lastStatusCode = response.statusCode;
-          continue;
-        }
-
-        final data = json.decode(response.body);
-        final items = _readItems(data, 'homestays');
+        lastStatusCode = response.statusCode;
         setState(() {
-          _homestays = items.map((e) {
-            final jsonItem = Map<String, dynamic>.from(e as Map);
-             return Homestay.fromJson(jsonItem);
-          }).toList();
-          if (_homestays.isEmpty) {
-            _errorMessage = 'No homestays found for the search query.';
-          }
+          _errorMessage = 'Failed to load homestays. Status code: $lastStatusCode';
         });
         return;
       }
-       setState(() {
-        _errorMessage = lastStatusCode == null
-            ? 'Failed to load homestays.'
-            : 'Failed to load homestays. Status code: $lastStatusCode';
-      });     
-    } catch (e) {
-       lastError = e;
+
+      final data = json.decode(response.body);
+      final items = _readItems(data, 'homestays');
       setState(() {
-        _errorMessage = 'Please check your internet connection: $lastError';
+        _homestays = items.map((e) {
+          return Homestay.fromJson(Map<String, dynamic>.from(e as Map));
+        }).toList();
+        if (_homestays.isEmpty) {
+          _errorMessage = 'No homestays found for the search query.';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Please check your internet connection: $e';
       });
     } finally {
       setState(() {
@@ -150,13 +133,41 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     }
   }
 
-    void _onSearch() {
-      _fetchHomestays(query: _searchController.text.trim(), state: _selectedState, district: _districtController.text.trim());
+  void _onSearch() {
+    final query = _searchController.text.trim();
+
+    // Save to search history
+    if (query.isNotEmpty && !_searchHistory.contains(query)) {
+      setState(() {
+        _searchHistory.insert(0, query);
+        if (_searchHistory.length > 10) _searchHistory.removeLast();
+      });
     }
 
-    void _onFilter() {
-      _fetchHomestays(state: _selectedState, district: _districtController.text.trim());
-    }
+    _fetchHomestays(
+      query: query,
+      state: _selectedState,
+      district: _districtController.text.trim(),
+      limit: _currentLimit,
+    );
+  }
+
+  void _onFilter() {
+    _fetchHomestays(
+      state: _selectedState,
+      district: _districtController.text.trim(),
+      limit: _currentLimit,
+    );
+  }
+
+  void _applyHistorySearch(String query) {
+    _searchController.text = query;
+    _onSearch();
+  }
+
+  void _clearHistory() {
+    setState(() => _searchHistory.clear());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -175,18 +186,18 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          if (_searchHistory.isNotEmpty) _buildSearchHistory(),
           _buildFilter(),
-          Expanded(
-            child: _buildBody(),
-          ),
+          _buildPaginationControl(),
+          Expanded(child: _buildBody()),
         ],
       ),
-    ); 
+    );
   }
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Row(
         children: [
           Expanded(
@@ -194,8 +205,11 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
               controller: _searchController,
               decoration: const InputDecoration(
                 hintText: 'Search by name, state, or district',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
               onSubmitted: (_) => _onSearch(),
             ),
@@ -206,8 +220,10 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             child: const Icon(Icons.search),
           ),
@@ -216,27 +232,70 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
     );
   }
 
-  Widget _buildFilter(){
+  Widget _buildSearchHistory() {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              const Text('Recent searches',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _clearHistory,
+                child: const Text('Clear',
+                    style: TextStyle(fontSize: 12, color: Colors.teal)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: _searchHistory.map((query) {
+              return ActionChip(
+                label: Text(query, style: const TextStyle(fontSize: 12)),
+                avatar: const Icon(Icons.history, size: 14),
+                onPressed: () => _applyHistorySearch(query),
+                backgroundColor: Colors.teal.withValues(alpha: 0.08),
+                side: const BorderSide(color: Colors.teal, width: 0.5),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Row(
         children: [
           Expanded(
-            child: DropdownButtonFormField<String?>(
-              initialValue: _selectedState,
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedState ?? '',
               items: [
-                const DropdownMenuItem(value: null, child: Text('All States')),
+                const DropdownMenuItem<String>(
+                    value: '', child: Text('All States')),
                 ..._states.map(
-                  (state) => DropdownMenuItem(value: state, child: Text(state)),
+                  (state) =>
+                      DropdownMenuItem<String>(value: state, child: Text(state)),
                 ),
               ],
               onChanged: (String? value) {
                 setState(() {
-                  _selectedState = value;
+                  _selectedState = value == '' ? null : value;
                   _fetchHomestays(
-                    state: value,
+                    state: value == '' ? null : value,
                     district: _districtController.text.trim(),
                     query: _searchController.text.trim(),
+                    limit: _currentLimit,
                   );
                 });
               },
@@ -245,10 +304,8 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
             ),
           ),
@@ -261,14 +318,50 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               ),
               onSubmitted: (_) => _onSearch(),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControl() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Row(
+        children: [
+          const Text('Results per page:',
+              style: TextStyle(fontSize: 13, color: Colors.grey)),
+          const SizedBox(width: 10),
+          ..._limitOptions.map((option) {
+            final isSelected = _currentLimit == option;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                label: Text('$option',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: isSelected ? Colors.white : Colors.teal)),
+                selected: isSelected,
+                selectedColor: Colors.teal,
+                backgroundColor: Colors.teal.withAlpha((0.08 * 255).round()),
+                side: const BorderSide(color: Colors.teal, width: 0.5),
+                onSelected: (_) {
+                  setState(() => _currentLimit = option);
+                  _fetchHomestays(
+                    query: _searchController.text.trim(),
+                    state: _selectedState,
+                    district: _districtController.text.trim(),
+                    limit: option,
+                  );
+                },
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -279,13 +372,22 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_errorMessage.isNotEmpty) {
-      return Center(child: Text(_errorMessage, style: const TextStyle(fontSize: 16,color: Colors.red)));
+      return Center(
+          child: Text(_errorMessage,
+              style: const TextStyle(fontSize: 16, color: Colors.red)));
     }
-    return RefreshIndicator(onRefresh: () => _fetchHomestays(query: _searchController.text.trim(), state: _selectedState, district: _districtController.text.trim()), child: ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: _homestays.length,
-      itemBuilder: (context, index) => _buildCard(_homestays[index]),
-    ),
+    return RefreshIndicator(
+      onRefresh: () => _fetchHomestays(
+        query: _searchController.text.trim(),
+        state: _selectedState,
+        district: _districtController.text.trim(),
+        limit: _currentLimit,
+      ),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        itemCount: _homestays.length,
+        itemBuilder: (context, index) => _buildCard(_homestays[index]),
+      ),
     );
   }
 
@@ -297,51 +399,65 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => HomestayDetailScreen(homestay: homestay)));
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) =>
+                      HomestayDetailScreen(homestay: homestay)));
         },
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (homestay.imageUrl.isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  homestay.imageUrl,
-                  height: 150,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => const SizedBox(),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (homestay.imageUrl.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    homestay.imageUrl,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            Text(homestay.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 14, color: Colors.teal),
-                const SizedBox(width: 4),
-                Text('${homestay.district}, ${homestay.state}', style: const TextStyle(color: Colors.grey)),
+                const SizedBox(height: 10),
               ],
-            ),
-            if (homestay.price != null) ...[
-              const SizedBox(height: 4),
-              Text('Price: RM ${homestay.price!.toStringAsFixed(2)}', style: const TextStyle(color: Colors.green)),
-            ],
-            if (homestay.description.isNotEmpty) ...[
+              Text(homestay.name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 6),
-              Text(homestay.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey)),
+              Row(
+                children: [
+                  const Icon(Icons.location_on, size: 14, color: Colors.teal),
+                  const SizedBox(width: 4),
+                  Text('${homestay.district}, ${homestay.state}',
+                      style: const TextStyle(color: Colors.grey)),
+                ],
+              ),
+              if (homestay.price != null) ...[
+                const SizedBox(height: 4),
+                Text('Price: RM ${homestay.price!.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.green)),
+              ],
+              if (homestay.description.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(homestay.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.grey)),
+              ],
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text('View Details',
+                    style: TextStyle(
+                        color: Colors.teal, fontWeight: FontWeight.bold)),
+              ),
             ],
-            const SizedBox(height: 6),
-            const Align(
-              alignment: Alignment.centerRight,
-              child: Text('View Details', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
-            )
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
