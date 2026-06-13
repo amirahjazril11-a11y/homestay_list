@@ -25,7 +25,13 @@ class Homestay {
       district: json['district'] ?? '',
       description: json['description'] ?? '',
       imageUrl: json['image'] ?? json['image_url'] ?? '',
-      price: json['price'] != null ? (json['price'] as num).toDouble() : null,
-    );
+      price: double.tryParse(
+        (json['price'] ??
+            json['price_per_night'] ??
+            json['harga'] ??
+          '')
+        .toString(),
+      ),
+    );  
   }
 }

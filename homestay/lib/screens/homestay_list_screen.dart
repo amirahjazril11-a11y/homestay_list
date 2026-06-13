@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homestay/models/homestay.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'homestay_detail_screen.dart';
 
 class HomestayListScreen extends StatefulWidget {
@@ -75,64 +76,77 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
   }
 
   Future<void> _fetchHomestays({
-    String? query,
-    String? state,
-    String? district,
-    int? limit,
-  }) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
+  String? query,
+  String? state,
+  String? district,
+  int? limit,
+}) async {
+  setState(() {
+    _isLoading = true;
+    _errorMessage = '';
+    _homestays = [];
+  });
 
-    final queryParameters = <String, String>{};
-    if (query != null && query.isNotEmpty) {
-      queryParameters['search'] = query;
-      queryParameters['limit'] = (limit ?? _currentLimit).toString();
-    }
-    if (state != null && state.isNotEmpty) {
-      queryParameters['state'] = state;
-    }
-    if (district != null && district.isNotEmpty) {
-      queryParameters['district'] = district;
-    }
-
-    int? lastStatusCode;
-
-    try {
-      final response = await http
-          .get(_apiUri(_homestaysEndpoint, queryParameters: queryParameters))
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode != 200) {
-        lastStatusCode = response.statusCode;
-        setState(() {
-          _errorMessage = 'Failed to load homestays. Status code: $lastStatusCode';
-        });
-        return;
-      }
-
-      final data = json.decode(response.body);
-      final items = _readItems(data, 'homestays');
-      setState(() {
-        _homestays = items.map((e) {
-          return Homestay.fromJson(Map<String, dynamic>.from(e as Map));
-        }).toList();
-        if (_homestays.isEmpty) {
-          _errorMessage = 'No homestays found for the search query.';
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Please check your internet connection: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  final queryParameters = <String, String>{};
+  
+  queryParameters['limit'] =
+    (limit ?? _currentLimit).toString();
+  
+  if (query != null && query.isNotEmpty) {
+    queryParameters['search'] = query;
+  }
+  if (state != null && state.isNotEmpty) {
+    queryParameters['state'] = state;
+  }
+  if (district != null && district.isNotEmpty) {
+    queryParameters['district'] = district;
   }
 
+  try {
+      final uri = _apiUri(
+        _homestaysEndpoint,
+        queryParameters: queryParameters,
+    );
+
+    final response = await http
+        .get(uri)
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final List items = data['homestays'] ?? data['data'] ?? [];
+      setState(() {
+        _homestays = items.map((e) {
+          final jsonItem = Map<String, dynamic>.from(e as Map);
+          return Homestay.fromJson(jsonItem);
+        }).toList();
+
+        // ← correct empty result message
+        if (_homestays.isEmpty) {
+          _errorMessage = 'No homestay found for your search.';
+        }
+      });
+    } else {
+      setState(() {
+        _errorMessage = 'Unable to load data from server.';
+      });
+    }
+  } on TimeoutException {
+    // ← specific timeout message
+    setState(() {
+      _errorMessage = 'Request timed out. Please try again.';
+    });
+  } catch (e) {
+    // ← only for real connection errors
+    setState(() {
+      _errorMessage = 'Please check your internet connection.';
+    });
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
   void _onSearch() {
     final query = _searchController.text.trim();
 
@@ -291,13 +305,13 @@ class _HomestayListScreenState extends State<HomestayListScreen> {
               onChanged: (String? value) {
                 setState(() {
                   _selectedState = value == '' ? null : value;
+                });
                   _fetchHomestays(
                     state: value == '' ? null : value,
                     district: _districtController.text.trim(),
                     query: _searchController.text.trim(),
                     limit: _currentLimit,
                   );
-                });
               },
               decoration: const InputDecoration(
                 labelText: 'Filter by State',
